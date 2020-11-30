@@ -1,9 +1,10 @@
 import os
 import io
 from google.cloud import vision, translate_v2
+import xlrd, xlwt
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"ServiceAccountToken.json"
-image_folder = 'Images/part 1/'
+image_folder = 'Images/333/'
 
 
 def translate(text: str,
@@ -22,7 +23,8 @@ def translate(text: str,
 def recognize(image_name: str,
               img_rec_client = False,
               translate_client = False,
-              translate_to_lang:str = False,):
+              translate_to_lang:str = False,
+              min_confidence: float = 0.65):
     image_path = image_folder+image_name
     if not img_rec_client:
         # create client if not created
@@ -35,8 +37,9 @@ def recognize(image_name: str,
     labels = response.label_annotations
 
     desc = []
-    for label in labels[:5]:
-
+    for label in labels:
+        if label.score <= min_confidence:
+            break
         desc.append([translate(text=label.description,
                                client_translate=translate_client)
                         if translate_to_lang
@@ -49,11 +52,23 @@ def recognize(image_name: str,
 if __name__ == '__main__':
     img_rec_client = vision.ImageAnnotatorClient()
     client_translate = translate_v2.Client()
+    report_filename = 'report.txt'
+    files = os.listdir(image_folder)
+    #print(files)
+    wb = xlwt.Workbook()
+    ws = wb.add_sheet('Test')
+    i = 0
+    for img_name in files:
+        rec_info = recognize(image_name=img_name,
+                             img_rec_client=img_rec_client,
+                             translate_client=client_translate,
+                             translate_to_lang='ru',
+                             min_confidence=0)
+        #print(f'{img_name} : ', end='')
+        #print(*[label[0] for label in rec_info], sep='; ')
 
-    img_name = 'photo_2020-11-30_00-48-50.jpg'
-    rec_info = recognize(image_name=img_name,
-                         img_rec_client=img_rec_client,
-                         translate_client=client_translate,
-                         translate_to_lang='ru')
-    for label in rec_info:
-        print(label)
+        ws.write(i, 0, img_name)
+        for col in range(len(rec_info)):
+            ws.write(i, col+1, rec_info[col][0])
+        i+= 1
+    wb.save('xl_rec 2.xls')
